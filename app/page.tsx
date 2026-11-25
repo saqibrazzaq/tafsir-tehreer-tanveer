@@ -1,19 +1,57 @@
-import { Button } from "@/components/ui/button"
+import { db } from "@/lib/db";
+import { tafsirTanveer } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { ReaderView, AyahData } from "@/components/reader/reader-view";
 
-export default function Page() {
-  return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
-    </div>
-  )
+interface PageProps {
+  searchParams: Promise<{
+    sura?: string;
+    aya?: string;
+  }>;
+}
+
+export default async function Page({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const sura = params?.sura ? Number(params.sura) : 1;
+  const aya = params?.aya ? Number(params.aya) : 1;
+
+  // Fetch ayah from database
+  let ayahRecord: AyahData | null = null;
+
+  try {
+    const [record] = await db
+      .select()
+      .from(tafsirTanveer)
+      .where(and(eq(tafsirTanveer.sura, sura), eq(tafsirTanveer.aya, aya)))
+      .limit(1);
+
+    if (record) {
+      ayahRecord = {
+        id: record.id,
+        sura: record.sura,
+        aya: record.aya,
+        juz: record.juz,
+        quranText: record.quranText || null,
+        arabicText: record.arabicText,
+        urduText: record.urduText,
+        englishText: record.englishText,
+      };
+    }
+  } catch (err) {
+    console.error("Database query error:", err);
+  }
+
+  // Fallback if not found or DB not yet connected
+  const initialAyah: AyahData = ayahRecord || {
+    id: 1,
+    sura: 1,
+    aya: 1,
+    juz: 1,
+    quranText: "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ",
+    arabicText: "<p>لم يتم العثور على تفسير لهذه الآية في قاعدة البيانات.</p>",
+    urduText: null,
+    englishText: null,
+  };
+
+  return <ReaderView initialAyah={initialAyah} />;
 }
